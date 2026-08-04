@@ -11,7 +11,6 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 from tagger.interrogator.interrogator import AbsInterrogator
-import tagger.dbimutils as dbimutils
 
 # Danbooru-style tag category ids used by the pixai-tagger onnx export
 GENERAL_CATEGORY = 0
@@ -94,19 +93,22 @@ class PixAITaggerInterrogator(AbsInterrogator):
         }
 
     def preprocess(self, image: np.ndarray, target_size: int) -> np.ndarray:
-        """Preprocess exactly like the WD14/EVA02 models.
+        """Preprocess for the deepghs ONNX export (NCHW, normalized).
 
-        The EVA02 encoder the pixai tagger was distilled from was trained with
-        the WD v3 preprocessing pipeline (white alpha compositing, square
-        padding, edge resize), so we deliberately reuse it here for accuracy.
+        The ONNX graph consumes an already-normalized, channels-first tensor
+        (``[batch, 3, 448, 448]``) and returns a sigmoid-ed ``prediction``
+        output. Resize + ``(x - 0.5) / 0.5`` normalization therefore happen in
+        Python here, matching the repo's ``preprocess.json``.
         """
-        # PIL RGB to OpenCV BGR
-        image = image[:, :, ::-1]
-
-        image = dbimutils.make_square(image, target_size)
-        image = dbimutils.smart_resize(image, target_size)
-        image = image.astype(np.float32)
-        image = np.expand_dims(image, 0)
+        # PIL RGB -> resize to model input, /255 -> (x-0.5)/0.5, HWC -> CHW
+        image = np.asarray(
+            Image.fromarray(image).resize((target_size, target_size), Image.BILINEAR),
+            dtype=np.float32,
+        )
+        image = image / 255.0
+        image = (image - 0.5) / 0.5
+        image = image.transpose(2, 0, 1)          # HWC -> CHW
+        image = np.expand_dims(image, 0)          # add batch dim
         return image
 
     def interrogate(
@@ -123,8 +125,8 @@ class PixAITaggerInterrogator(AbsInterrogator):
         if self.model is None:
             raise Exception("Model not loading.")
 
-        # convert an image to fit the model
-        _, height, _, _ = self.model.get_inputs()[0].shape
+        # convert an image to fit the model (channels-first ONNX export)
+        _, _, height, _ = self.model.get_inputs()[0].shape
 
         # alpha to white
         image = input_image.convert('RGBA')
@@ -135,9 +137,11 @@ class PixAITaggerInterrogator(AbsInterrogator):
 
         image = self.preprocess(image, height)
 
-        # evaluate model
+        # evaluate model; the 'prediction' output is already sigmoid-ed
         input_name = self.model.get_inputs()[0].name
-        label_name = self.model.get_outputs()[0].name
+        label_name = 'prediction' if any(
+            o.name == 'prediction' for o in self.model.get_outputs()
+        ) else self.model.get_outputs()[0].name
         confidents = self.model.run([label_name], {input_name: image})[0]
 
         if self.tags is None:

@@ -60,14 +60,14 @@ def make_interrogator(confidences=None):
         if isinstance(row['ips'], str) and row['ips'] != '[]'
     }
 
-    # fake onnx session
+    # fake onnx session (channels-first input, 'prediction' output)
     model = MagicMock()
     inp = MagicMock()
-    inp.shape = [1, 448, 448, 3]
+    inp.shape = [1, 3, 448, 448]
     inp.name = 'input'
     model.get_inputs.return_value = [inp]
     out = MagicMock()
-    out.name = 'output'
+    out.name = 'prediction'
     model.get_outputs.return_value = [out]
     model.run.return_value = [np.array([confidences], dtype=np.float32)]
     itg.model = model
