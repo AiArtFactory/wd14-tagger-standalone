@@ -6,6 +6,7 @@ from PIL import Image, ImageFile
 from pathlib import Path
 import argparse
 
+from tagger.interrogator.pixaitaggerinterrogator import PixAITaggerInterrogator
 from tagger.interrogators import interrogators
 
 # Allow images with broken headers to load
@@ -20,8 +21,20 @@ group.add_argument('--file', help='Predictions for one file')
 parser.add_argument(
     '--threshold',
     type=float,
-    default=0.35,
-    help='Prediction threshold (default is 0.35)')
+    default=None,
+    help='Prediction threshold (default is 0.35; for PixAI: general 0.3, character 0.85)')
+parser.add_argument(
+    '--general-threshold',
+    dest='general_threshold',
+    type=float,
+    default=None,
+    help='PixAI only: threshold for general tags (default is 0.3; overrides --threshold)')
+parser.add_argument(
+    '--character-threshold',
+    dest='character_threshold',
+    type=float,
+    default=None,
+    help='PixAI only: threshold for character tags (default is 0.85)')
 parser.add_argument(
     '--ext',
     default='.txt',
@@ -67,6 +80,23 @@ interrogator = interrogators[args.model]
 if args.cpu:
     interrogator.use_cpu()
 
+# PixAI applies its own per-category thresholds inside the interrogator;
+# configure them here and skip the second (global) threshold filter later.
+pixai_mode = isinstance(interrogator, PixAITaggerInterrogator)
+if pixai_mode:
+    interrogator.set_thresholds(
+        general=args.general_threshold if args.general_threshold is not None
+                else args.threshold,
+        character=args.character_threshold,
+    )
+    # general_threshold defaults to the model default (0.3) unless the user
+    # passed --threshold/--general-threshold; character defaults to 0.85.
+    effective_postprocess_threshold = 0.0
+else:
+    effective_postprocess_threshold = (
+        args.threshold if args.threshold is not None else 0.35
+    )
+
 def parse_exclude_tags() -> set[str]:
     if args.exclude_tags is None:
         return set()
@@ -102,7 +132,7 @@ def image_interrogate(image_path: Path, tag_escape: bool, exclude_tags: Iterable
 
     return AbsInterrogator.postprocess_tags(
         result[1],
-        threshold=args.threshold,
+        threshold=effective_postprocess_threshold,
         escape_tag=tag_escape,
         replace_underscore=tag_escape,
         exclude_tags=exclude_tags,

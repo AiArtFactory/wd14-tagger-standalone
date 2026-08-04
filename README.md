@@ -47,6 +47,11 @@ python run.py --dir dir/dir
 ## Support Models
 
 ```
+# PixAI Tagger v0.9 model. (released 2025, Danbooru snapshot 2025-01)
+# Uses per-category thresholds: general tags 0.3, character tags 0.85.
+# Character tags additionally add their series (IP) tag.
+python run.py --model pixai-tagger-v0.9 --file image.jpg
+
 # Camie Tagger / Camie Tagger v2 model.(released 2025)
 python run.py --model camie-tagger --file image.jpg
 python run.py --model camie-tagger-v2 --file image.jpg
@@ -79,6 +84,24 @@ python run.py --model z3d-e621-convnext-silveroxides --file image.jpg
 python run.py --model mld-caformer.dec-5-97527 --file image.jpg
 python run.py --model mld-tresnetd.6-30000 --file image.jpg
 ```
+
+## PixAI Tagger per-category thresholds
+
+The PixAI model applies its own recommended per-category thresholds internally
+(general tags `0.3`, character tags `0.85`), and character tags automatically
+contribute their series (IP) tag (e.g. `1girl, ..., artoria pendragon \(fate\), ...,
+fate \(series\)`). Two extra flags can override them:
+
+```
+# give the character filter a looser threshold, general stays 0.3
+python run.py --model pixai-tagger-v0.9 --dir images/ --character-threshold 0.5
+
+# override the general-tag threshold (and/or use --threshold as a shorthand
+# for the general threshold)
+python run.py --model pixai-tagger-v0.9 --dir images/ --general-threshold 0.2
+```
+
+For all other models `--threshold` (default `0.35`) keeps its original meaning.
 
 ## Using GPU
 
