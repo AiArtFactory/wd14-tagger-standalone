@@ -1,0 +1,13 @@
+# Dependencies for NVIDIA GPU / Google Colab machines.
+# Same as requirements.txt but with the CUDA-enabled onnxruntime build.
+# `onnxruntime` and `onnxruntime-gpu` share the same Python module and must
+# NOT coexist; install this file only after uninstalling the CPU build:
+#   pip uninstall -y onnxruntime onnxruntime-gpu && pip install -r requirements-gpu.txt
+
+numpy==2.2.2
+pandas==2.2.3
+Pillow==11.1.0
+huggingface-hub==0.28.1
+deepdanbooru==1.0.3
+onnxruntime-gpu==1.20.2
+opencv-python==4.11.0.86

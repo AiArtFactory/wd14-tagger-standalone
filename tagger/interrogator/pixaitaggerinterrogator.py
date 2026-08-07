@@ -79,6 +79,7 @@ class PixAITaggerInterrogator(AbsInterrogator):
         self.model = InferenceSession(str(model_path), providers=self.providers)
 
         print(f'Loaded {self.name} model from {model_path}', file=sys.stderr)
+        self.log_provider_mode()
 
         self.tags = pd.read_csv(tags_path)
 

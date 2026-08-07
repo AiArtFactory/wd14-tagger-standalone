@@ -10,6 +10,16 @@ from onnxruntime import InferenceSession, get_available_providers
 
 tag_escape_pattern = re.compile(r'([\\()])')
 
+# providers that mean "uses an accelerator", as opposed to the pure-CPU one.
+ACCELERATOR_PROVIDERS = {
+    'CUDAExecutionProvider',
+    'CoreMLExecutionProvider',
+    'TensorrtExecutionProvider',
+    'DirectMLExecutionProvider',
+    'OpenVINOExecutionProvider',
+    'ROCMExecutionProvider',
+}
+
 class AbsInterrogator:
     model: InferenceSession | None
     tags: pd.DataFrame | None
@@ -86,9 +96,10 @@ class AbsInterrogator:
         return unloaded
 
     def use_cpu(self) -> None:
-        """Force CPU-only execution."""
+        """Force CPU-only execution, regardless of GPU availability."""
         self.providers = ['CPUExecutionProvider']
-        print(f'Forcing CPU execution for {self.name}', file=sys.stderr)
+        print(f'[device] {self.name}: --cpu flag set, forcing CPU execution.',
+              file=sys.stderr)
 
     def get_available_providers(self) -> List[str]:
         """Get list of available execution providers."""
@@ -101,25 +112,49 @@ class AbsInterrogator:
 
     def get_optimal_provider(self) -> List[str]:
         """Get the optimal provider based on system capabilities.
-        
+
         Returns a list of providers in order of preference:
         - CoreMLExecutionProvider (if on Apple Silicon)
         - CUDAExecutionProvider (if NVIDIA GPU available)
         - CPUExecutionProvider (always available as fallback)
         """
         available = self.get_available_providers()
-        
+
         # Start with most optimal providers first
         optimal_order = [
             'CoreMLExecutionProvider',  # Best for Apple Silicon
             'CUDAExecutionProvider',    # Best for NVIDIA GPUs
             'CPUExecutionProvider'      # Fallback
         ]
-        
+
         # Return list of available providers in optimal order
         selected = [p for p in optimal_order if p in available]
-        #print(f'Selected optimal providers for {self.name}: {selected}', file=sys.stderr)
         return selected
+
+    def uses_accelerator(self, providers: List[str] = None) -> bool:
+        """True if the given (or current) providers use a GPU/NPU rather than
+        pure CPU execution."""
+        return any(p in ACCELERATOR_PROVIDERS
+                   for p in (providers if providers is not None else self.providers))
+
+    def log_provider_mode(self) -> None:
+        """Log which providers onnxruntime actually instantiated and whether
+        that means GPU (or Apple Neural Engine) acceleration or a CPU fallback."""
+        if hasattr(self, 'model') and self.model is not None:
+            try:
+                actual = self.model.get_providers()
+            except Exception:
+                actual = self.providers
+        else:
+            actual = self.providers
+
+        if self.uses_accelerator(actual):
+            print(f'[device] {self.name}: GPU acceleration active '
+                  f'(providers: {actual})', file=sys.stderr)
+        else:
+            print(f'[device] {self.name}: no usable GPU detected - running on CPU '
+                  f'(providers: {actual}). For NVIDIA GPUs install the '
+                  f'onnxruntime-gpu package (see README).', file=sys.stderr)
 
     def interrogate(
         self,

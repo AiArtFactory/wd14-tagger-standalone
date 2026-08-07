@@ -9,12 +9,17 @@ automatically from Hugging Face on first use and cached locally.
 
 ## install
 
-Requires Python 3.10+.
+Requires Python 3.10+. By default the CPU-only build of onnxruntime is
+installed; on NVIDIA machines use the `requirements-gpu.txt` variant instead
+(see "Using GPU" below).
 
 ```
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+
+# NVIDIA GPU / Google Colab: install this instead of requirements.txt
+pip uninstall -y onnxruntime onnxruntime-gpu && pip install -r requirements-gpu.txt
 ```
 
 ## usage
@@ -43,7 +48,8 @@ options:
   --ext EXT             Extension to add to caption file in case of dir option
                         (default is .txt)
   --overwrite           Overwrite caption file if it exists
-  --cpu                 Use CPU only
+  --cpu                 Use CPU only (default: auto-detect - use a GPU if one
+                        is available, fall back to CPU otherwise)
   --rawtag              Use the raw output of the model
   --recursive           Enable recursive file search
   --exclude-tag t1,t2,t3
@@ -181,16 +187,49 @@ python run.py \
 This writes a caption `.txt` next to every image containing the auto-detected
 general/character/series tags plus your trigger tag, minus noise tags.
 
-## Using GPU
+## Using GPU (auto-detected)
 
-- **Apple Silicon**: the CoreML (Neural Engine) execution provider is picked
-  up automatically by onnxruntime — nothing to install. (You may see harmless
-  CoreML warnings; `--cpu` forces CPU-only.)
-- **NVIDIA GPU**: requires CUDA 12.2 and cuDNN 8.x, then install the GPU build:
+GPU acceleration is **automatic**. When a model loads, the tagger asks
+onnxruntime which execution providers are usable and picks the best one:
+
+1. **Apple Silicon** - `CoreMLExecutionProvider` (Neural Engine), via the
+   default `onnxruntime` package. No setup needed.
+2. **NVIDIA GPU** - `CUDAExecutionProvider`, requires the `onnxruntime-gpu`
+   package (see below).
+3. Otherwise it falls back to plain CPU.
+
+When a model loads you can see which mode engaged on stderr, e.g.
+`[device] PixAI Tagger v0.9: GPU acceleration active (providers: ['CUDAExecutionProvider', 'CPUExecutionProvider'])`
+or `... no usable GPU detected - running on CPU ...`.
+
+Force CPU only (even when a GPU is available) with `--cpu`.
+
+### NVIDIA / Google Colab
+
+The default `onnxruntime` package is CPU-only; for NVIDIA GPUs install the GPU
+build. On Google Colab (CUDA 12 + cuDNN 12) or a local CUDA-12.x machine:
 
 ```
-pip install onnxruntime-gpu --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+pip uninstall -y onnxruntime onnxruntime-gpu
+pip install -r requirements-gpu.txt        # pins onnxruntime-gpu==1.20.2
+# or just: pip install onnxruntime-gpu==1.20.2
 ```
+
+> `onnxruntime` and `onnxruntime-gpu` share the same Python module and **must
+> not** be installed at the same time - uninstalling first (as above) avoids a
+> silent fallback to CPU.
+
+Make sure a GPU runtime is selected: Colab -> Runtime -> Change runtime type ->
+hardware accelerator **GPU**. Verify CUDA is visible to onnxruntime:
+
+```python
+import onnxruntime as ort
+print(ort.get_available_providers())   # must include 'CUDAExecutionProvider'
+```
+
+If `CUDAExecutionProvider` is missing or you hit a CUDA/cuDNN library version
+mismatch, try a newer build (`pip install onnxruntime-gpu` without a pin), or
+reinstall the CPU one (`pip install onnxruntime==1.20.2`).
 
 https://onnxruntime.ai/docs/install/</br>
 https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#requirements

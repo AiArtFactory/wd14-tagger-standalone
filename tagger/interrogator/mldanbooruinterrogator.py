@@ -45,6 +45,7 @@ class MLDanbooruInterrogator(AbsInterrogator):
         self.model = InferenceSession(model_path,
                                         providers=self.providers)
         print(f'Loaded {self.name} model from {model_path}', file=sys.stderr)
+        self.log_provider_mode()
 
         with open(tags_path, 'r', encoding='utf-8') as filen:
             self.tags = json.load(filen)
