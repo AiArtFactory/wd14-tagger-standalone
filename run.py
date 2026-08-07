@@ -210,16 +210,32 @@ def explore_image_files(folder_path: Path) -> Generator[Path, None, None]:
             yield from explore_image_files(path)
 
 if args.dir:
+    from tqdm.auto import tqdm
+
     root_path = Path(args.dir)
-    for image_path in explore_image_files(root_path):
+    image_files = list(explore_image_files(root_path))
+
+    # tqdm renders "n/total [elapsed<remaining, rate it/s]" by default; the
+    # `images` unit makes the rate read as "img/s" (images per second).
+    progress = tqdm(
+        image_files,
+        desc='Tagging',
+        unit='image',
+        mininterval=0
+        if sys.stderr.isatty() else 5.0,  # quieter updates when piped/Colab
+        file=sys.stderr,
+    )
+
+    for image_path in progress:
         caption_path = image_path.parent / f'{image_path.stem}{args.ext}'
 
         if caption_path.is_file() and not args.overwrite:
-            # skip if caption exists
-            print('skip:', image_path)
+            # keep the bar readable; report the skip without breaking the bar
+            from tqdm.auto import tqdm as _tqdm_write
+            _tqdm_write.write(f'skip: {image_path}', file=sys.stderr)
             continue
 
-        print('processing:', image_path)
+        progress.set_postfix_str(image_path.name, refresh=False)
         tags = image_interrogate(image_path, not args.rawtag, parse_exclude_tags(), parse_additional_tags())
 
         tags_str = ', '.join(tags.keys())

@@ -68,10 +68,13 @@ Tag a single image (tags are printed to stdout):
 python run.py --file image.jpg
 ```
 
-Tag all images in a directory (writes one `.txt` caption file per image):
+Tag all images in a directory (writes one `.txt` caption file per image).
+A progress bar shows `n/total` images tagged, the estimated time remaining,
+and the overall tagging rate in images/second:
 
 ```
-python run.py --dir path/to/images
+$ python run.py --dir path/to/images
+Tagging:  55%|#####4    | 55/100 [01:12<00:59, 1.31image/s, Screenshot 21.46.08.png]
 ```
 
 Notes for `--dir` mode:
