@@ -12,7 +12,66 @@ from tagger.interrogators import interrogators
 # Allow images with broken headers to load
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-parser = argparse.ArgumentParser()
+_EPILOGUE = """\
+Available --model values:
+
+  recommended for LoRA captioning:
+    pixai-tagger-v0.9            PixAI Tagger v0.9 (2025, Danbooru snapshot
+                                 2025-01). Per-category thresholds: general
+                                 tags 0.3, character tags 0.85 (override with
+                                 --general-threshold / --character-threshold).
+                                 Detected characters also add their series tag.
+    wd-eva02-large-tagger-v3     best SmilingWolf model (~0.3B params, 2024)
+    camie-tagger-v2              70k tags, great character recognition (2025)
+
+  SmilingWolf WD14 family:
+    wd-vit-large-tagger-v3       large v3 (2024)
+    wd-v1-4-vit-tagger.v3        v3 (2024)
+    wd-v1-4-convnext-tagger.v3   v3 (2024)
+    wd-v1-4-swinv2-tagger.v3     v3 (2024)
+    wd14-vit.v2                  v2 (2023)
+    wd14-convnext.v2             v2 (2023)
+    wd-v1-4-moat-tagger.v2       v2 (2023)
+    wd14-vit.v1                  v1 (2022)
+    wd14-convnext.v1             v1 (2022)
+    wd14-convnextv2.v1           v1 (default, 2023)
+    wd14-swinv2-v1               v1 (2023)
+
+  other:
+    camie-tagger                 Camie Tagger v1 (2025)
+    z3d-e621-convnext-toynya     e621/furry tags
+    z3d-e621-convnext-silveroxides  e621/furry tags
+    mld-caformer.dec-5-97527     ML-Danbooru (coarse generic tags only)
+    mld-tresnetd.6-30000         ML-Danbooru (coarse generic tags only)
+
+Examples:
+  # tag one image with the default model (WebUI-style tags to stdout)
+  python run.py --file image.jpg
+
+  # tag a whole directory with PixAI (writes one .txt caption per image)
+  python run.py --model pixai-tagger-v0.9 --dir training_images
+
+  # LoRA dataset: add your trigger tag, drop noise tags, overwrite old captions
+  python run.py --model pixai-tagger-v0.9 --dir training_images \\
+      --additional-tag "my_trigger_tag" --exclude-tag "watermark,signature" \\
+      --overwrite
+
+  # keep exact Danbooru spelling (underscores, parentheses unescaped)
+  python run.py --model pixai-tagger-v0.9 --file image.jpg --rawtag
+
+Notes:
+  With --dir, an existing caption file is kept by default; use --overwrite to
+  regenerate. Supported inputs: .png, .jpg, .jpeg, .webp (add --recursive to
+  include subfolders). All other models filter tags with --threshold (0.35);
+  pixai uses its per-category thresholds instead.
+"""
+
+parser = argparse.ArgumentParser(
+    description='Tag anime-style images with Danbooru-style tags and write '
+                'one caption .txt next to each image (--dir mode).',
+    epilog=_EPILOGUE,
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+)
 
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('--dir', help='Predictions for all images in the directory')
@@ -70,8 +129,10 @@ parser.add_argument(
 parser.add_argument(
     '--model',
     default='wd14-convnextv2.v1',
+    choices=sorted(interrogators.keys()),
     metavar='MODELNAME',
-    help='modelname to use for prediction (default is wd14-convnextv2.v1)')
+    help='modelname to use for prediction (default is wd14-convnextv2.v1; '
+         'see full list below)')
 args = parser.parse_args()
 
 # get interrogator configs
